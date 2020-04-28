@@ -37,4 +37,21 @@ class User extends Authenticatable
     protected $casts = [
         'email_verified_at' => 'datetime',
     ];
+
+    /**
+     * The relationships that should be eager loaded.
+     *
+     * @var array
+     */
+    protected $with = [
+        'contactData'
+    ];
+
+    /**
+     * User's Contact Information
+    */
+    public function contactData()
+    {
+        return $this->hasOne('App\UsersContactData');
+    }
 }
