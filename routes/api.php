@@ -26,3 +26,6 @@ Route::group(['prefix' => 'auth'], function () {
 		Route::get('logout', 'AuthController@logout');
 	});
 });
+
+Route::get('order/{pizza}', 'PizzaController@order')->name('order');
+Route::apiResource('pizza', 'PizzaController');

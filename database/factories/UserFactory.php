@@ -18,11 +18,13 @@ use Illuminate\Support\Str;
 */
 
 $factory->define(User::class, function (Faker $faker) {
+	$rand = Str::random(10);
+	$mail = $rand.'@guest.com';
     return [
-        'name' => $faker->name,
-        'email' => $faker->unique()->safeEmail,
+        'name' => 'guest_'.$rand,
+        'email' => $mail,
         'email_verified_at' => now(),
-        'password' => '$2y$10$92IXUNpkjO0rOQ5byMi.Ye4oKoEa3Ro9llC/.og/at2.uheWG/igi', // password
+        'password' => bcrypt($mail),
         'remember_token' => Str::random(10),
     ];
 });
