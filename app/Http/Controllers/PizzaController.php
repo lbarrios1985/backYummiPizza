@@ -53,7 +53,7 @@ class PizzaController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
@@ -76,7 +76,7 @@ class PizzaController extends Controller
      */
     public function update(Request $request, Pizza $pizza)
     {
-        //
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
@@ -87,8 +87,9 @@ class PizzaController extends Controller
      */
     public function destroy(Pizza $pizza)
     {
-        $pizza->delete();
-        return response()->json(['success' => 'Deleted Successfully'], 200);
+        // $pizza->delete();
+        // return response()->json(['success' => 'Deleted Successfully'], 200);
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
