@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Pizza;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\DB;
 
 class PizzaController extends Controller
 {
@@ -101,6 +102,7 @@ class PizzaController extends Controller
      */
     public function order(Request $request, Pizza $pizza)
     {
+        $original_price = $pizza->price;
         $exchange_value = 1;
         if ($request->has('currency')) {
             $currency = mb_strtoupper($request['currency'], 'UTF-8');
@@ -113,6 +115,7 @@ class PizzaController extends Controller
                 );
                 $response = json_decode($exchange->getBody()->getContents(), True);
                 $exchange_value = $response['rates'][$currency];
+                $pizza->price = $pizza->price * $exchange_value;
                 Config::set('cart_manager.currency', $currency);
             } catch(\Exception $e){
                 return response()->json(['error'=>$e->getMessage()], 409);
@@ -123,17 +126,29 @@ class PizzaController extends Controller
         if ($request->has('qty')) {
             $qty = $request->qty;
         }
+
+        if (isset($currency)) {
+            $pizza->update();
+        }
+
         if (cart()->isEmpty()) {
             $qty == 0 ? $qty = 1 : '';
             $cart = Pizza::addToCart($pizza->id, $qty);
         } else {
             cart()->add($pizza, $qty);
         }
+        cart()->refreshAllItemsData();
 
+        $pizza->price = $original_price;
+        $pizza->update();
+
+        DB::table('carts')->where('auth_user', auth('api')->user()->id)->latest()
+                          ->update(['currency' => Config::get('cart_manager.currency'),]);
+
+        
         $response = [];
-        $response['data'] = cart()->data();
         $response['totals'] = cart()->totals();
-        $response['items'] = cart()->items();
+        $response['items'] = cart()->items($displayCurrency = true);
 
         if ($request->headers->has('guest-created')) {
             $token = $request->header('Authorization');
