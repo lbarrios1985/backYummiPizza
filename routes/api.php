@@ -23,6 +23,7 @@ Route::group(['prefix' => 'auth'], function () {
 	Route::post('signup', 'AuthController@signup');
   
 	Route::group(['middleware' => 'auth:api'], function() {
+		Route::patch('edit_profile', 'AuthController@updateProfile');
 		Route::get('logout', 'AuthController@logout');
 	});
 });
