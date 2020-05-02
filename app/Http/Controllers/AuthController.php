@@ -38,10 +38,17 @@ class AuthController extends Controller
         $user->name = $request->name;
         $user->email = $request->email;
         $user->password = bcrypt($request->password);
-        $user->contactData->cellphone = $request->cellphone;
-        $user->contactData->address = $request->address;
         $user->save();
-        $user->contactData->save();
+        if (!$user->contactData) {
+            $user->contactData()->create([
+                'cellphone' => $request->cellphone,
+                'address' => $request->address
+            ]);
+        } else {
+            $user->contactData->cellphone = $request->cellphone;
+            $user->contactData->address = $request->address;
+            $user->contactData->save();
+        }
         
         return response()->json(['success' => 'User created successfully'], 201);
     }
