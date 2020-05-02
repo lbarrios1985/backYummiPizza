@@ -40,6 +40,13 @@ class PizzaController extends Controller
         $pizzas = Pizza::orderBy($by, $dir)->paginate($paginate);
 
         if ($pizzas->total() > 0) {
+            // Get EUR - USD exchange rate to retrieve both prices to the customers 
+            $exchange_value = $this->exchangeValue('EUR');
+            // Loop pizzas
+            foreach ($pizzas as $key => $pizza) {
+                // Add the price on each pizza to be shown
+                $pizza->eur_price = round($pizza->price * $exchange_value, 2);
+            }
             return response()->json(['success' => $pizzas], 200);
         } else {
             return response()->json(['error' => 'No Pizzas found',], 404);
@@ -65,6 +72,11 @@ class PizzaController extends Controller
      */
     public function show(Pizza $pizza)
     {
+        // Get EUR - USD exchange rate to retrieve both prices to the customers 
+        $exchange_value = $this->exchangeValue('EUR');
+        // Add the price on the pizza to be shown
+        $pizza->eur_price = round($pizza->price * $exchange_value, 2);
+
         return response()->json(['success' => $pizza], 200);
     }
 
@@ -107,29 +119,14 @@ class PizzaController extends Controller
         // Base exchange rate value 1 to 1 (USD to USD)
         $exchange_value = 1;
         // Parameter present in the request means another currency has been selected
-        if ($request->has('currency')) {
-            $currency = mb_strtoupper($request['currency'], 'UTF-8');
-            // Try to get the convertion rate between the given currency & USD
-            try {
-                $client = new Client();
-                // Free API
-                $exchange = $client->request(
-                    'GET',
-                    // env('EXCHANGE_RATES_URL')
-                    'https://api.exchangeratesapi.io/latest?base=USD&symbols='.$currency
-                );
-                // API response to array
-                $response = json_decode($exchange->getBody()->getContents(), True);
-                // Keep the exchange value
-                $exchange_value = $response['rates'][$currency];
-                // Convert the pizza price to the selected currency
-                $pizza->price = $pizza->price * $exchange_value;
-                // Set the currency in the cart config
-                Config::set('cart_manager.currency', $currency);
-            } catch(\Exception $e){
-                // If any error, throw it
-                return response()->json(['error'=>$e->getMessage()], 409);
-            }
+        if ($request->headers->has('currency')) {
+            $currency = $request->header('currency');
+            // Get the exchange value
+            $exchange_value = $this->exchangeValue($currency);
+            // Convert the pizza price to the selected currency
+            $pizza->price = $pizza->price * $exchange_value;
+            // Set the currency in the cart config
+            Config::set('cart_manager.currency', $currency);
         }
 
         $qty = 0;
@@ -176,5 +173,37 @@ class PizzaController extends Controller
             $response['token'] = str_replace('Bearer ', '', $token);
         }
         return response()->json([$response], 200);
+    }
+
+    /**
+     * Return a currency's exchange rate to USD given its ISO-CODE
+     *
+     * @param  $ISO ISO 4217 currency code
+     * @return $exchange_value The exchange rate value
+     * @throws \Exception
+     */
+    private function exchangeValue($ISO)
+    {
+        // Force ISO Code to uppercase as it should
+        $currency = mb_strtoupper($ISO, 'UTF-8');
+        // Try to get the convertion rate between the given currency & USD
+        try {
+            $client = new Client();
+            // Free API
+            $exchange = $client->request(
+                'GET',
+                // env('EXCHANGE_RATES_URL')
+                'https://api.exchangeratesapi.io/latest?base=USD&symbols='.$currency
+            );
+            // API response to array
+            $response = json_decode($exchange->getBody()->getContents(), True);
+            // Extract the exchange value
+            $exchange_value = $response['rates'][$currency];
+
+            return $exchange_value;
+        } catch(\Exception $e){
+            // If any error, throw it
+            return response()->json(['error'=>$e->getMessage()], 409);
+        }
     }
 }

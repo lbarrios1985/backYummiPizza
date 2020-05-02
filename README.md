@@ -71,3 +71,23 @@ php artisan serve
 ```
 
 You can now access the server at http://localhost:8000
+
+# API Routes
+
+## User
+Method: POST 		api/auth/signup
+Method: POST 		api/auth/login
+Method: GET 		api/user
+Method: PATCH 		api/auth/edit_profile
+Method: GET 		api/auth/logout
+
+## Pizzas
+Method: RESOURCE	api/pizza
+Method: GET 		api/order/{pizza_id}
+
+## Shopping Cart
+Method: GET 		api/cart
+Method: DELETE		api/cart/delete
+Method: GET 		api/cart/increment/item/{item_pos}
+Method: GET 		api/cart/decrement/item/{item_pos}
+Method: GET 		api/cart/remove/item/{item_pos}
