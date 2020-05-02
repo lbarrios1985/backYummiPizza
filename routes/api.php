@@ -23,9 +23,22 @@ Route::group(['prefix' => 'auth'], function () {
 	Route::post('signup', 'AuthController@signup');
   
 	Route::group(['middleware' => 'auth:api'], function() {
+		Route::patch('edit_profile', 'AuthController@updateProfile');
 		Route::get('logout', 'AuthController@logout');
 	});
 });
 
 Route::get('order/{pizza}', 'PizzaController@order')->name('order');
 Route::apiResource('pizza', 'PizzaController');
+
+Route::middleware('auth:api')->group(function () {
+	// Cart
+	Route::get('cart', 'CartController@getCart');
+	Route::delete('cart/delete', 'CartController@deleteCart');
+	// Items
+	Route::group(['prefix' => 'cart'], function () {
+		Route::get('increment/item/{item_pos}', 'CartController@incrementItem');
+		Route::get('decrement/item/{item_pos}', 'CartController@decrementItem');
+		Route::get('remove/item/{item_pos}', 'CartController@removeItem');
+	});
+});

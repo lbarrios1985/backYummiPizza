@@ -3,9 +3,10 @@
 namespace App\Http\Controllers;
 
 use App\Pizza;
+use GuzzleHttp\Client;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Config;
-use GuzzleHttp\Client;
+use Illuminate\Support\Facades\DB;
 
 class PizzaController extends Controller
 {
@@ -39,6 +40,13 @@ class PizzaController extends Controller
         $pizzas = Pizza::orderBy($by, $dir)->paginate($paginate);
 
         if ($pizzas->total() > 0) {
+            // Get EUR - USD exchange rate to retrieve both prices to the customers 
+            $exchange_value = $this->exchangeValue('EUR');
+            // Loop pizzas
+            foreach ($pizzas as $key => $pizza) {
+                // Add the price on each pizza to be shown
+                $pizza->eur_price = round($pizza->price * $exchange_value, 2);
+            }
             return response()->json(['success' => $pizzas], 200);
         } else {
             return response()->json(['error' => 'No Pizzas found',], 404);
@@ -53,7 +61,7 @@ class PizzaController extends Controller
      */
     public function store(Request $request)
     {
-        //
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
@@ -64,6 +72,11 @@ class PizzaController extends Controller
      */
     public function show(Pizza $pizza)
     {
+        // Get EUR - USD exchange rate to retrieve both prices to the customers 
+        $exchange_value = $this->exchangeValue('EUR');
+        // Add the price on the pizza to be shown
+        $pizza->eur_price = round($pizza->price * $exchange_value, 2);
+
         return response()->json(['success' => $pizza], 200);
     }
 
@@ -76,7 +89,7 @@ class PizzaController extends Controller
      */
     public function update(Request $request, Pizza $pizza)
     {
-        //
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
@@ -87,8 +100,9 @@ class PizzaController extends Controller
      */
     public function destroy(Pizza $pizza)
     {
-        $pizza->delete();
-        return response()->json(['success' => 'Deleted Successfully'], 200);
+        // $pizza->delete();
+        // return response()->json(['success' => 'Deleted Successfully'], 200);
+        return response()->json(['error' => 'Not authorized'], 403);
     }
 
     /**
@@ -100,44 +114,96 @@ class PizzaController extends Controller
      */
     public function order(Request $request, Pizza $pizza)
     {
+        // Keep track of original pizza price
+        $original_price = $pizza->price;
+        // Base exchange rate value 1 to 1 (USD to USD)
         $exchange_value = 1;
-        if ($request->has('currency')) {
-            $currency = mb_strtoupper($request['currency'], 'UTF-8');
-            try {
-                $client = new Client();
-                $exchange = $client->request(
-                    'GET',
-                    // env('EXCHANGE_RATES_URL')
-                    'https://api.exchangeratesapi.io/latest?base=USD&symbols='.$currency
-                );
-                $response = json_decode($exchange->getBody()->getContents(), True);
-                $exchange_value = $response['rates'][$currency];
-                Config::set('cart_manager.currency', $currency);
-            } catch(\Exception $e){
-                return response()->json(['error'=>$e->getMessage()], 409);
-            }
+        // Parameter present in the request means another currency has been selected
+        if ($request->headers->has('currency')) {
+            $currency = $request->header('currency');
+            // Get the exchange value
+            $exchange_value = $this->exchangeValue($currency);
+            // Convert the pizza price to the selected currency
+            $pizza->price = $pizza->price * $exchange_value;
+            // Set the currency in the cart config
+            Config::set('cart_manager.currency', $currency);
         }
 
         $qty = 0;
         if ($request->has('qty')) {
+            // The item quantity has been selected
             $qty = $request->qty;
         }
-        if (cart()->isEmpty()) {
-            $qty == 0 ? $qty = 1 : '';
-            $cart = Pizza::addToCart($pizza->id, $qty);
-        } else {
-            cart()->add($pizza, $qty);
+        $qty == 0 ? $qty = 1 : '';
+
+        if (isset($currency)) {
+            // When the currency has changed, store the item price temporarily
+            $pizza->update();
         }
 
+        if (cart()->isEmpty()) {
+            // User hasn't a created cart, create a new one from theselected cartable model item
+            $cart = Pizza::addToCart($pizza->id, $qty);
+        } else {
+            // A cart already exist to the User, add the selected item
+            // If the item alreay exist nothing will change, except there's a difference on the qty
+            cart()->add($pizza, $qty);
+        }
+        // Refreshes all items amounts of the Cart
+        cart()->refreshAllItemsData();
+
+        if ($pizza->wasChanged()) {
+            // Restore the original item's price
+            $pizza->price = $original_price;
+            $pizza->update();
+        }
+
+        // Add the currency selected to the custom field on the cart
+        DB::table('carts')->where('auth_user', auth('api')->user()->id)->latest()
+                          ->update(['currency' => Config::get('cart_manager.currency'),]);
+
         $response = [];
-        $response['data'] = cart()->data();
         $response['totals'] = cart()->totals();
-        $response['items'] = cart()->items();
+        $response['items'] = cart()->items($displayCurrency = true);
 
         if ($request->headers->has('guest-created')) {
+            // A new guest user has been created & the header is set
             $token = $request->header('Authorization');
+            // Extract the Bearer token & pass it to the frontend to keep track of the User's cart
             $response['token'] = str_replace('Bearer ', '', $token);
         }
         return response()->json([$response], 200);
+    }
+
+    /**
+     * Return a currency's exchange rate to USD given its ISO-CODE
+     *
+     * @param  $ISO ISO 4217 currency code
+     * @return $exchange_value The exchange rate value
+     * @throws \Exception
+     */
+    private function exchangeValue($ISO)
+    {
+        // Force ISO Code to uppercase as it should
+        $currency = mb_strtoupper($ISO, 'UTF-8');
+        // Try to get the convertion rate between the given currency & USD
+        try {
+            $client = new Client();
+            // Free API
+            $exchange = $client->request(
+                'GET',
+                // env('EXCHANGE_RATES_URL')
+                'https://api.exchangeratesapi.io/latest?base=USD&symbols='.$currency
+            );
+            // API response to array
+            $response = json_decode($exchange->getBody()->getContents(), True);
+            // Extract the exchange value
+            $exchange_value = $response['rates'][$currency];
+
+            return $exchange_value;
+        } catch(\Exception $e){
+            // If any error, throw it
+            return response()->json(['error'=>$e->getMessage()], 409);
+        }
     }
 }
