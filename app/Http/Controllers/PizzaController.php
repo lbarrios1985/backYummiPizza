@@ -137,6 +137,7 @@ class PizzaController extends Controller
             // The item quantity has been selected
             $qty = $request->qty;
         }
+        $qty == 0 ? $qty = 1 : '';
 
         if (isset($currency)) {
             // When the currency has changed, store the item price temporarily
@@ -145,7 +146,6 @@ class PizzaController extends Controller
 
         if (cart()->isEmpty()) {
             // User hasn't a created cart, create a new one from theselected cartable model item
-            $qty == 0 ? $qty = 1 : '';
             $cart = Pizza::addToCart($pizza->id, $qty);
         } else {
             // A cart already exist to the User, add the selected item
