@@ -116,8 +116,11 @@ class AuthController extends Controller
             return response()->json(['error'=>$validator->errors()], 422);
         }
 
-        $user->fill($request->all());
-        $user->contactData->fill($request->all());
+        $user->fill($request->only('name', 'email'));
+        $user->contactData->fill($request->only('cellphone', 'address'));
+        if ($request->has('password')) {
+            $user->password = bcrypt($request->password);
+        }
         $user->update();
         $user->contactData->update();
 
